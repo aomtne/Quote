@@ -159,7 +159,7 @@
         /* Stats Cards */
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(4, 1fr);
             gap: 1rem;
             margin-bottom: 2rem;
         }
@@ -215,6 +215,15 @@
             padding: 1rem;
             text-align: left;
             font-weight: 600;
+            writing-mode: horizontal-tb;
+            text-orientation: mixed;
+        }
+
+        /* 表頭最後一列 - 確保橫列 */
+        table thead th:last-child {
+            writing-mode: horizontal-tb;
+            text-orientation: mixed;
+            white-space: nowrap;
         }
 
         table tbody tr {
@@ -228,6 +237,18 @@
 
         table td {
             padding: 0.75rem 1rem;
+            writing-mode: horizontal-tb;
+            text-orientation: mixed;
+            word-wrap: break-word;
+            white-space: normal;
+        }
+
+        /* 檢測人員列 - 確保橫列顯示 */
+        table td:last-child {
+            writing-mode: horizontal-tb;
+            text-orientation: mixed;
+            white-space: nowrap;
+            overflow: visible;
         }
 
         .empty-state {
@@ -390,7 +411,7 @@
             }
 
             .stats-grid {
-                grid-template-columns: 1fr;
+                grid-template-columns: repeat(2, 1fr);
             }
 
             .analysis-grid {
@@ -415,28 +436,6 @@
 
     <div class="container">
         <!-- 派工統計卡片 -->
-        <div class="stats-container">
-            <h2 style="font-size: 1.5rem; color: #0d47a1; margin-bottom: 1.5rem; border-bottom: 3px solid #0d47a1; padding-bottom: 0.5rem;">📊 派工統計概覽</h2>
-            <div class="stats-grid">
-                <!-- 本週排程卡片 -->
-                <div class="stat-card">
-                    <div class="stat-icon">📋</div>
-                    <div class="stat-label">本週排程</div>
-                    <div class="stat-value" id="thisWeek-count">-</div>
-                    <div class="stat-change" id="thisWeek-persons">-</div>
-                    <div class="stat-status" id="thisWeek-status">-</div>
-                </div>
-
-                <!-- 下週預定排程卡片 -->
-                <div class="stat-card">
-                    <div class="stat-icon">📅</div>
-                    <div class="stat-label">下週預定排程</div>
-                    <div class="stat-value" id="nextWeek-count">-</div>
-                    <div class="stat-change" id="nextWeek-persons">-</div>
-                    <div class="stat-status" id="nextWeek-status">-</div>
-                </div>
-            </div>
-        </div>
 
         <!-- Search Section -->
         <div class="section">
@@ -461,17 +460,14 @@
                 </div>
             </div>
 
-            <div class="button-group">
-                <button class="btn-primary" onclick="performSearch()">搜尋</button>
-                <button class="btn-secondary" onclick="clearSearch()">清除篩選</button>
-                <button class="btn-info" onclick="exportResults()">匯出 CSV</button>
+            <div class="button-group" style="display: flex; gap: 0.5rem; flex-wrap: nowrap; margin-bottom: 1.5rem;">
+                <button class="btn-primary" onclick="performSearch()" style="flex: 1;">搜尋</button>
+                <button class="btn-secondary" onclick="clearSearch()" style="flex: 1;">清除篩選</button>
+                <button class="btn-info" onclick="exportResults()" style="flex: 1;">匯出 CSV</button>
+                <button class="btn-success" onclick="syncFromGoogleSheets()" style="flex: 1;">一鍵更新資料庫</button>
             </div>
 
-            <!-- Data Management Buttons -->
-            <div class="button-group">
-                <button class="btn-success" onclick="syncFromGoogleSheets()">一鍵更新資料庫</button>
-                <span id="syncStatusInline" style="font-size: 0.85rem; color: #666; align-self: center;"></span>
-            </div>
+            <span id="syncStatusInline" style="font-size: 0.85rem; color: #666; margin-bottom: 1.5rem; display: block;"></span>
         </div>
 
         <!-- Stats Section -->
@@ -727,27 +723,60 @@
             const tbody = document.getElementById('resultsBody');
             
             if (currentReports.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" class="empty-state">沒有找到符合條件的結果</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="12" class="empty-state">沒有找到符合條件的結果</td></tr>';
                 return;
             }
 
-            tbody.innerHTML = currentReports.map(report => `
-                <tr>
-                    <td>${report.report_no || ''}</td>
-                    <td>${report.job_no || ''}</td>
-                    <td>${report.exam_date || ''}</td>
-                    <td>${report.report_type_cn || report.report_type || ''}</td>
-                    <td>${report.item_original || ''}</td>
-                    <td>${report.item_normalized || ''}</td>
-                    <td>${report.quantity || ''}</td>
-                    <td>${report.consignor || ''}</td>
-                    <td style="text-align:center;">${report.num_examiners || ''}</td>
-                    <td style="text-align:center;">${report.days || ''}</td>
-                    <td style="text-align:center; font-weight:600; color:#0d47a1;">${report.person_days || ''}</td>
-                    <td>${report.examiner_names || ''}</td>
-                </tr>
-            `).join('');
-
+            let html = '';
+            currentReports.forEach(report => {
+                const examinerNames = report.examiner_names ? report.examiner_names.split(/[、,，]/).filter(n => n.trim()) : [];
+                
+                if (examinerNames.length === 0) {
+                    // 如果沒有檢測人員，顯示空行
+                    html += `
+                        <tr>
+                            <td>${report.report_no || ''}</td>
+                            <td>${report.job_no || ''}</td>
+                            <td>${report.exam_date || ''}</td>
+                            <td>${report.report_type_cn || report.report_type || ''}</td>
+                            <td>${report.item_original || ''}</td>
+                            <td>${report.item_normalized || ''}</td>
+                            <td>${report.quantity || ''}</td>
+                            <td>${report.consignor || ''}</td>
+                            <td style="text-align:center;">${report.num_examiners || ''}</td>
+                            <td style="text-align:center;">${report.days || ''}</td>
+                            <td style="text-align:center; font-weight:600; color:#0d47a1;">${report.person_days || ''}</td>
+                            <td></td>
+                        </tr>
+                    `;
+                } else {
+                    // 為每個檢測人員創建一行
+                    examinerNames.forEach((examiner, index) => {
+                        html += `
+                            <tr>
+                                ${index === 0 ? `
+                                    <td>${report.report_no || ''}</td>
+                                    <td>${report.job_no || ''}</td>
+                                    <td>${report.exam_date || ''}</td>
+                                    <td>${report.report_type_cn || report.report_type || ''}</td>
+                                    <td>${report.item_original || ''}</td>
+                                    <td>${report.item_normalized || ''}</td>
+                                    <td>${report.quantity || ''}</td>
+                                    <td>${report.consignor || ''}</td>
+                                    <td style="text-align:center;">${report.num_examiners || ''}</td>
+                                    <td style="text-align:center;">${report.days || ''}</td>
+                                    <td style="text-align:center; font-weight:600; color:#0d47a1;">${report.person_days || ''}</td>
+                                ` : `
+                                    <td colspan="11"></td>
+                                `}
+                                <td>${examiner.trim()}</td>
+                            </tr>
+                        `;
+                    });
+                }
+            });
+            
+            tbody.innerHTML = html;
             displayPricingResults();
         }
 
