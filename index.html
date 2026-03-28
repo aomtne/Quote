@@ -589,17 +589,23 @@
                 return matchesKeyword && matchesType && matchesConsignor;
             });
 
-            // Also filter pricing: match job_nos from filtered reports + consignor filter
-            const matchedJobNos = new Set(currentReports.map(r => (r.job_no || '').trim()).filter(Boolean));
+            // Also filter pricing: keyword on job_name/dept_job_no + consignor filter
             currentPricing = EMBEDDED_PRICING.filter(pricing => {
-                let match = true;
-                if (matchedJobNos.size > 0) {
-                    match = matchedJobNos.has((pricing.dept_job_no || '').trim());
+                let matchesKeyword = true;
+                let matchesConsignor = true;
+
+                if (keyword) {
+                    matchesKeyword =
+                        (pricing.job_name && pricing.job_name.toLowerCase().includes(keyword)) ||
+                        (pricing.dept_job_no && pricing.dept_job_no.toLowerCase().includes(keyword)) ||
+                        (pricing.consignor && pricing.consignor.toLowerCase().includes(keyword));
                 }
-                if (consignor && match) {
-                    match = pricing.consignor === consignor;
+
+                if (consignor) {
+                    matchesConsignor = pricing.consignor === consignor;
                 }
-                return match;
+
+                return matchesKeyword && matchesConsignor;
             });
 
             displayResults();
@@ -752,10 +758,12 @@
                 `;
             } else {
                 // Regular stats mode
-                const modePersonDays = getMode(currentReports.map(r => r.person_days));
-                const minPersonDays = Math.min(...currentReports.map(r => r.person_days || 0));
+                const personDaysArr = currentReports.map(r => r.person_days).filter(v => v && v > 0);
+                const modePersonDays = getMode(personDaysArr);
+                const minPersonDays = personDaysArr.length > 0 ? Math.min(...personDaysArr) : 0;
                 const avgPrice = calculateAveragePrice(currentPricing);
-                const maxPrice = Math.max(...currentPricing.map(p => p.agreed_price || 0));
+                const priceArr = currentPricing.map(p => p.agreed_price).filter(v => v && v > 0);
+                const maxPrice = priceArr.length > 0 ? Math.max(...priceArr) : 0;
 
                 statsGrid.innerHTML = `
                     <div class="stat-card">
