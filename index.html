@@ -303,6 +303,83 @@
             color: #0d47a1;
         }
 
+        /* ===== 派工統計卡片樣式 ===== */
+        .stats-container {
+            margin-bottom: 2rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 8px;
+            padding: 24px;
+            border: 1px solid #ddd;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+        }
+
+        .stat-icon {
+            font-size: 1.8em;
+            margin-bottom: 12px;
+        }
+
+        .stat-label {
+            font-size: 0.85em;
+            color: #666;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+        }
+
+        .stat-value {
+            font-size: 2em;
+            font-weight: 700;
+            color: #0d47a1;
+            margin-bottom: 8px;
+        }
+
+        .stat-change {
+            font-size: 0.85em;
+            color: #666;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .stat-status {
+            font-size: 0.85em;
+            font-weight: 600;
+            margin-top: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .stat-status.red {
+            color: #e74c3c;
+        }
+
+        .stat-status.yellow {
+            color: #f39c12;
+        }
+
+        .stat-status.green {
+            color: #27ae60;
+        }
+
         @media (max-width: 768px) {
             header h1 {
                 font-size: 1.8rem;
@@ -337,6 +414,30 @@
     </header>
 
     <div class="container">
+        <!-- 派工統計卡片 -->
+        <div class="stats-container">
+            <h2 style="font-size: 1.5rem; color: #0d47a1; margin-bottom: 1.5rem; border-bottom: 3px solid #0d47a1; padding-bottom: 0.5rem;">📊 派工統計概覽</h2>
+            <div class="stats-grid">
+                <!-- 本週排程卡片 -->
+                <div class="stat-card">
+                    <div class="stat-icon">📋</div>
+                    <div class="stat-label">本週排程</div>
+                    <div class="stat-value" id="thisWeek-count">-</div>
+                    <div class="stat-change" id="thisWeek-persons">-</div>
+                    <div class="stat-status" id="thisWeek-status">-</div>
+                </div>
+
+                <!-- 下週預定排程卡片 -->
+                <div class="stat-card">
+                    <div class="stat-icon">📅</div>
+                    <div class="stat-label">下週預定排程</div>
+                    <div class="stat-value" id="nextWeek-count">-</div>
+                    <div class="stat-change" id="nextWeek-persons">-</div>
+                    <div class="stat-status" id="nextWeek-status">-</div>
+                </div>
+            </div>
+        </div>
+
         <!-- Search Section -->
         <div class="section">
             <div class="section-title">搜尋與查詢</div>
@@ -839,13 +940,9 @@
         function getGoogleAppsScriptUrl() {
             let url = localStorage.getItem('googleAppsScriptUrl');
             if (!url) {
-                url = prompt('首次使用：請輸入 Google Apps Script Web App URL\n（部署後只需輸入一次，之後會自動記住）');
-                if (url && url.trim()) {
-                    url = url.trim();
-                    localStorage.setItem('googleAppsScriptUrl', url);
-                } else {
-                    return null;
-                }
+                // 自動填入預設的 Google Apps Script 網址
+                url = 'https://script.google.com/macros/s/AKfycbzacdbsPnuCojE5TnMYFzsDLJQDVY2NSKex7y-LVpT3nni1Bc4zCh5036VlEB-deYx2/exec';
+                localStorage.setItem('googleAppsScriptUrl', url);
             }
             return url;
         }
@@ -1171,6 +1268,156 @@
                 maximumFractionDigits: 0
             }).format(num);
         }
+
+        // ==================== 派工統計功能 ====================
+        function getWeekRanges() {
+            var today = new Date();
+            var day = today.getDay();
+            var thisMonday = new Date(today);
+            thisMonday.setDate(today.getDate() - (day === 0 ? 6 : day - 1));
+            var thisSunday = new Date(thisMonday);
+            thisSunday.setDate(thisMonday.getDate() + 6);
+            var nextMonday = new Date(thisSunday);
+            nextMonday.setDate(thisSunday.getDate() + 1);
+            var nextSunday = new Date(nextMonday);
+            nextSunday.setDate(nextMonday.getDate() + 6);
+            
+            function dateStr(year, month, day) {
+                return year + '-' + String(month + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+            }
+            
+            return {
+                thisWeek: { 
+                    start: dateStr(thisMonday.getFullYear(), thisMonday.getMonth(), thisMonday.getDate()), 
+                    end: dateStr(thisSunday.getFullYear(), thisSunday.getMonth(), thisSunday.getDate()) 
+                },
+                nextWeek: { 
+                    start: dateStr(nextMonday.getFullYear(), nextMonday.getMonth(), nextMonday.getDate()), 
+                    end: dateStr(nextSunday.getFullYear(), nextSunday.getMonth(), nextSunday.getDate()) 
+                }
+            };
+        }
+
+        function loadAndRenderScheduleData() {
+            const thisWeekData = localStorage.getItem('scheduleData_thisWeek');
+            const nextWeekData = localStorage.getItem('scheduleData_nextWeek');
+
+            if (thisWeekData) {
+                try {
+                    renderScheduleCard('thisWeek', JSON.parse(thisWeekData));
+                } catch (e) {
+                    renderScheduleCardEmpty('thisWeek');
+                }
+            } else {
+                renderScheduleCardEmpty('thisWeek');
+            }
+
+            if (nextWeekData) {
+                try {
+                    renderScheduleCard('nextWeek', JSON.parse(nextWeekData));
+                } catch (e) {
+                    renderScheduleCardEmpty('nextWeek');
+                }
+            } else {
+                renderScheduleCardEmpty('nextWeek');
+            }
+        }
+
+        function renderScheduleCard(week, data) {
+            const countElement = document.getElementById(`${week}-count`);
+            if (countElement) {
+                countElement.textContent = data.itemCount || 0;
+            }
+
+            const personsElement = document.getElementById(`${week}-persons`);
+            if (personsElement) {
+                if (data.jobs && data.jobs.length > 0) {
+                    const jobDescriptions = data.jobs.map(job => {
+                        const note = job.note || job.category;
+                        const firstPerson = job.persons[0];
+                        const count = job.persons.length;
+                        
+                        let startDate = job.start;
+                        let endDate = job.end;
+                        
+                        if (startDate && startDate.includes('T')) {
+                            startDate = startDate.split('T')[0];
+                        }
+                        if (endDate && endDate.includes('T')) {
+                            endDate = endDate.split('T')[0];
+                        }
+                        
+                        const startMMDD = startDate ? startDate.substring(5) : '';
+                        const endMMDD = endDate ? endDate.substring(5) : '';
+                        const dateRange = `[${startMMDD} ~ ${endMMDD}]`;
+                        
+                        if (count === 1) {
+                            return `${note} (${firstPerson}) ${dateRange}`;
+                        } else {
+                            return `${note} (${firstPerson}等${count}人) ${dateRange}`;
+                        }
+                    }).join('\n');
+                    
+                    personsElement.textContent = jobDescriptions;
+                    personsElement.style.whiteSpace = 'pre-wrap';
+                    personsElement.style.wordWrap = 'break-word';
+                } else if (data.assignedPersons && data.assignedPersons.length > 0) {
+                    const personsList = data.assignedPersons.join(', ');
+                    personsElement.textContent = `(${personsList})`;
+                    personsElement.style.whiteSpace = 'normal';
+                } else {
+                    personsElement.textContent = '(無派工)';
+                    personsElement.style.whiteSpace = 'normal';
+                }
+            }
+
+            const statusElement = document.getElementById(`${week}-status`);
+            if (statusElement) {
+                const available = data.availablePersons || 0;
+                let status, color;
+
+                if (available <= 3) {
+                    status = '🔴 人力緊張';
+                    color = 'red';
+                } else if (available >= 4 && available <= 8) {
+                    status = '🟡 人力適中';
+                    color = 'yellow';
+                } else {
+                    status = '🟢 人力充足';
+                    color = 'green';
+                }
+
+                statusElement.textContent = `${status} (${available}人可用)`;
+                statusElement.className = `stat-status ${color}`;
+            }
+        }
+
+        function renderScheduleCardEmpty(week) {
+            const countElement = document.getElementById(`${week}-count`);
+            const personsElement = document.getElementById(`${week}-persons`);
+            const statusElement = document.getElementById(`${week}-status`);
+
+            if (countElement) countElement.textContent = '-';
+            if (personsElement) personsElement.textContent = '(未連接)';
+            if (statusElement) {
+                statusElement.textContent = '等待數據...';
+                statusElement.className = 'stat-status';
+            }
+        }
+
+        // 監聽 LocalStorage 變化
+        window.addEventListener('storage', (event) => {
+            if (event.key === 'scheduleData_thisWeek' || event.key === 'scheduleData_nextWeek') {
+                loadAndRenderScheduleData();
+            }
+        });
+
+        // 頁面載入時執行
+        document.addEventListener('DOMContentLoaded', () => {
+            loadAndRenderScheduleData();
+            // 每 5 分鐘刷新一次
+            setInterval(loadAndRenderScheduleData, 5 * 60 * 1000);
+        });
     </script>
 </body>
 </html>
